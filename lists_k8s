@@ -1,0 +1,19 @@
+[K8S]
+k8s-m1 ansible_ssh_host=192.168.13.142 ETCD="yes" K8S="both"
+k8s-n1 ansible_ssh_host=192.168.13.172 ETCD="yes" K8S="slave"
+k8s-n2 ansible_ssh_host=192.168.13.173 ETCD="yes" K8S="slave"
+
+[K8S:vars]
+Master="master.service.upyun"
+Flannel_IPS="10.0.0.0/16"
+Docker_Opts="-g /disk/ssd1/docker --log-opt max-size=1g"
+Docker_Registry="registry.service.upyun:5000"
+Docker_Mirror="https://registry.docker-cn.com"
+
+# docker pull registry:2
+# docker run -tid --restart=always -p 5000:5000 --name registry -v /data/registry:/var/lib/registry registry:2 
+# 将registry的数据卷与本地关联，便于管理和备份registry数据
+# docker pull nginx # 从外网registry拉一个nginx镜像过来
+# docker tag nginx registry.service.upyun:5000/nginx # 为本地镜像打tag
+# docker push registry.service.upyun:5000/nginx # 推送至本地registry
+# docker rmi registry.service.upyun:5000/nginx # 删除本地镜像

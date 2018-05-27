@@ -1,0 +1,3 @@
+{% for host in groups["K8S"] %}
+{{ hostvars[host]["ansible_ssh_host"] }}  {{ host }}
+{% endfor %}
