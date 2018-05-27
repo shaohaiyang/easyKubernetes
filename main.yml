@@ -12,7 +12,7 @@
 
     - name: 1. adjuest centos7 system
       shell: 
-        set enforce 0;
+        setenforce 0;
         timedatectl set-timezone Asia/Shanghai;
         timedatectl set-ntp 0;
         timedatectl set-local-rtc 0;
