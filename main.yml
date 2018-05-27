@@ -22,6 +22,7 @@
         cat /tmp/hosts >> /etc/hosts;
         hostnamectl --static set-hostname "{{inventory_hostname}}";  
         localectl set-locale LANG=en_US.UTF8;
+        chattr -i /etc/resolv.conf;
         echo -e "{{inventory_hostname}}" > /etc/hostname;
         echo -e 'LANG=en_US.utf8\nLC_CTYPE=en_US.utf8' > /etc/locale.conf;
         echo -e '*\t\tsoft\t\tnproc\t\t10240\nroot\t\tsoft\t\tproc\t\tunlimited' > /etc/security/limits.d/20-nproc.conf;
