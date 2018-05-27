@@ -34,6 +34,7 @@
         sed -r -i '/^[^root]/s:/bin/bash:/sbin/nologin:g' /etc/passwd;
         sed -r -i '/#Port 22/s^.*^Port 65422^g;/^PasswordAuthentication/s^yes^no^g' /etc/ssh/sshd_config;
         sed -r -i -e '/DefaultLimitCORE/s^.*^DefaultLimitCORE=infinity^g' -e '/DefaultLimitNOFILE/s^.*^DefaultLimitNOFILE=100000^g' -e '/DefaultLimitNPROC/s^.*^DefaultLimitNPROC=100000^g' /etc/systemd/system.conf;
+        chattr +i /etc/resolv.conf;
       tags: init
 
     - name: 2. install epel and kernel-ml
