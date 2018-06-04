@@ -11,10 +11,14 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: registry.service.upyun:5000/nginx
+        #image: registry.service.upyun:5000/nginx
+        image: nginx
         livenessProbe:
         ports:
         - containerPort: 80
         resources:
+          limits:
+            cpu: "1"
           requests:
-            cpu: 400m
+            #cpu: 500m
+            cpu: 0.5
