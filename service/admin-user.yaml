@@ -1,0 +1,6 @@
+# create admin-user with yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admin-user
+  namespace: kube-system
