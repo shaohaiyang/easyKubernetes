@@ -2,10 +2,11 @@
 k8s-m1 ansible_ssh_host=192.168.13.142 ETCD="yes" K8S="both"
 k8s-n1 ansible_ssh_host=192.168.13.145 ETCD="yes" K8S="slave"
 k8s-n2 ansible_ssh_host=192.168.13.172 ETCD="yes" K8S="slave"
+k8s-n3 ansible_ssh_host=192.168.144.102 ETCD="no" K8S="slave"
 
 [K8S:vars]
 Master="master.service.upyun"
 Flannel_IPS="10.0.0.0/16"
-Docker_Opts="-g /disk/ssd1/docker --log-opt max-size=1g"
+Docker_Opts="-g /disk/ssd1/docker" 
 Docker_Registry="registry.service.upyun:5000"
 Docker_Mirror="https://registry.docker-cn.com"

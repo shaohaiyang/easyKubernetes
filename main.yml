@@ -47,17 +47,8 @@
         - elrepo.repo
       tags: init
 
-#    - name: 2. install epel and kernel-ml
-#      shell:
-#        rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org;
-#        rpm -Uvh http://www.elrepo.org/elrepo-release-7.0-2.el7.elrepo.noarch.rpm;
-#        yum makecache fast;
-#        yum --enablerepo=elrepo-kernel -y install kernel-ml;
-#      when: elrepo_result.stat.exists == False
-#      tags: init
-
     - name: 3. install linux base software
-      yum: name={{item}} state=installed enablerepo=elrepo-kernel
+      yum: name={{item}} state=latest enablerepo=elrepo-kernel
       with_items:
         - tree
         - ntpdate
@@ -70,16 +61,30 @@
         - rsync
         - bash-completion
         - iptables-services
+        - ipset
+        - ipvsadm
         - bind-utils
         - python-setuptools
         - yum-utils
         - kernel-ml
-        - docker-latest
+        - docker
       when: elrepo_result.stat.exists == False
       tags: init
 
+    - name: 3. install etcd
+      yum: name={{item}} state=latest
+      with_items:
+        - etcd
+      tags: etcd
+
+    - name: 3. install flannel
+      yum: name={{item}} state=latest
+      with_items:
+        - flannel
+      tags: flannel
+
     - name: 3. install etcd,flannel,kubernetes
-      yum: name={{item}} state=installed
+      yum: name={{item}} state=latest
       with_items:
         - etcd
         - flannel
@@ -87,7 +92,7 @@
       tags: k8s
 
     - name: 3. install kubeadm toolkit
-      yum: name={{item}} state=installed enablerepo=kubernetes
+      yum: name={{item}} state=latest enablerepo=kubernetes
       with_items:
         - kubelet
         - kubeadm
@@ -114,9 +119,16 @@
       tags:
         - init
         - docker
+      ignore_errors: yes 
 
     - name: 4. template docker config
       template: src=template/docker.j2 dest=/etc/sysconfig/docker
+      tags:
+        - init
+        - docker
+
+    - name: 4. template docker config
+      template: src=template/docker-daemon.json dest=/etc/docker/daemon.json
       tags:
         - init
         - docker
@@ -156,6 +168,13 @@
       when:
         K8S == "slave" or K8S == "both"
 
+    - name: 4. template master apiconfig
+      template: src=template/master-apiconfig.yaml.j2 dest=/etc/kubernetes/master-apiconfig.yaml
+      tags:
+        - k8s
+      when:
+        K8S == "slave" or K8S == "both"
+
     - name: 5. disable some service
       service: name={{item}} state=stopped enabled=no
       with_items:
@@ -172,12 +191,14 @@
       tags:
         - k8s
         - etcd
+      ignore_errors: yes 
       when:
         ETCD == "yes"
 
-    - name: 5. set flanneld network
+    - name: 5. check flanneld network
       shell: etcdctl get /upyun.com/network/config
       register: etcd_result
+      ignore_errors: yes 
       tags:
         - k8s
         - flannel
@@ -189,6 +210,7 @@
       tags:
         - k8s
         - flannel
+      ignore_errors: yes 
       when:
         ETCD == "yes" and etcd_result.rc != 0
 
@@ -196,6 +218,7 @@
       service: name={{item}} state=restarted enabled=yes
       tags:
         - init
+      ignore_errors: yes 
       with_items:
         - network
         - irqbalance
@@ -210,6 +233,7 @@
         - kube-apiserver
         - kube-controller-manager
         - kube-scheduler
+      ignore_errors: yes 
       when:
         K8S == "master" or K8S == "both"
 
@@ -221,5 +245,66 @@
         - flanneld
         - kubelet
         - kube-proxy
+      ignore_errors: yes 
       when:
         K8S == "slave" or K8S == "both"
+
+    - name: 1. stop service
+      service: name={{item}} state=stopped enabled=yes
+      tags:
+        - kube-router
+      with_items:
+        - kube-apiserver
+        - kube-controller-manager
+        - kube-scheduler
+        - kube-proxy
+        - kubelet
+      ignore_errors: yes 
+      when:
+        K8S == "slave" or K8S == "both"
+
+    - name: 2. update kubelet config
+      shell: sed -r -i -e '/api-servers/s@^@#@g' -e '/master-apiconfig/s@#@@g' /etc/kubernetes/kubelet
+      tags:
+        - kube-router
+      when:
+        K8S == "slave" or K8S == "both"
+
+    - name: 3. copy kubernetes latest 
+      copy: src=k8s-latest/{{item}} dest=/usr/bin/ mode=0755
+      with_items:
+        - kube-apiserver
+        - kube-controller-manager
+        - kube-scheduler
+        - kube-proxy
+        - kube-aggregator
+        - kubelet
+        - kubectl
+      tags:
+        - kube-router
+      when:
+        K8S == "slave" or K8S == "both"
+
+    - name: 4. start service
+      service: name={{item}} state=started enabled=yes
+      tags:
+        - kube-router
+      with_items:
+        - kube-proxy
+        - kubelet
+      ignore_errors: yes 
+      when:
+        K8S == "slave" or K8S == "both"
+
+    - name: 4. start service
+      service: name={{item}} state=started enabled=yes
+      tags:
+        - kube-router
+      with_items:
+        - flanneld
+        - kube-apiserver
+        - kube-controller-manager
+        - kube-scheduler
+      ignore_errors: yes
+      when:
+        K8S == "master" or K8S == "both"
