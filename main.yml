@@ -206,7 +206,7 @@
         ETCD == "yes"
 
     - name: 5. set flanneld network
-      shell: etcdctl mk /upyun.com/network/config '{"Network":"{{Flannel_IPS}}"}'
+      shell: etcdctl mk /upyun.com/network/config '{"Network":"{{Cluster_cidr}}"}'
       tags:
         - k8s
         - flannel
