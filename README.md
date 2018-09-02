@@ -1,9 +1,7 @@
-#########################################################################
 # dnsmasq configure
 # 192.168.13.142  master.service.upyun
 # 192.168.13.142  registry.service.upyun
 
-#########################################################################
 # ansible-playbook -i lists_k8s main.yml -e "host=all" -t init,etcd
 # tags:
 # - docker (包含在init)
@@ -14,11 +12,9 @@
 # - k8s-bin (下载安装kubernetes二进制)
 # - kube-router (新型的集大成者网络框架)
 
-#########################################################################
 # grub2-set-default "`sed -r -n "s/^menuentry '(.*)' --class.*/\1/p" /boot/grub2/grub.cfg|grep 4.17`"
 # grub2-mkconfig -o /boot/grub2/grub.cfg
 
-#########################################################################
 # docker pull registry:2
 # docker run -tid --restart=always -p 5000:5000 --name registry -v /data/registry:/var/lib/registry registry:2 
 # 将registry的数据卷与本地关联，便于管理和备份registry数据
@@ -31,7 +27,6 @@
 # KUBELET_POD_INFRA_CONTAINER="--pod-infra-container-image=gcr.io/google_containers/pause-amd64:3.0"
 # KUBELET_POD_INFRA_CONTAINER="--pod-infra-container-image=docker.io/kubernetes/pause:latest"
 
-#########################################################################
 # kubeadm toolkit
 # curl -s -L -o /bin/cfssl https://pkg.cfssl.org/R1.2/cfssl_linux-amd64
 # curl -s -L -o /bin/cfssljson https://pkg.cfssl.org/R1.2/cfssljson_linux-amd64
