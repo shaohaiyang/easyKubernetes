@@ -1,0 +1,107 @@
+#
+# MariaDB 10.1 Galera Cluster
+#
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: mysql
+  namespace: lnmp
+spec:
+  serviceName: mysql-svc
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      initContainers:
+      - name: copy-mariadb-config
+        image: busybox
+        command: ['sh', '-c', 'cp /configmap/* /etc/mysql/conf.d']
+        volumeMounts:
+        - name: configmap
+          mountPath: /configmap
+        - name: config
+          mountPath: /etc/mysql/conf.d
+      containers:
+      - name: mysql
+        image: ausov/k8s-mariadb-cluster
+        ports:
+        - containerPort: 3306
+          name: mysql
+        - containerPort: 4444
+          name: sst
+        - containerPort: 4567
+          name: replication
+        - containerPort: 4568
+          name: ist
+        env:
+        - name: GALERA_SERVICE
+          value: "mysql-svc"
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secrets
+              key: root-password
+        - name: MYSQL_ROOT_USER
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secrets
+              key: root-user
+        - name: MYSQL_INITDB_SKIP_TZINFO
+          value: "yes"
+        readinessProbe:
+          exec:
+            command: ["bash", "-c", "mysql -uroot -p\"${MYSQL_ROOT_PASSWORD}\" -e 'show databases;'"]
+          initialDelaySeconds: 20
+          timeoutSeconds: 5
+        volumeMounts:
+        - name: config
+          mountPath: /etc/mysql/conf.d
+        - name: datadir
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: config
+        emptyDir: {}
+      - name: configmap
+        configMap:
+          name: mysql-config-vol
+          items:
+            - path: "galera.cnf"
+              key: galera.cnf
+            - path: "mariadb.cnf"
+              key: mariadb.cnf
+  volumeClaimTemplates:
+  - metadata:
+      name: datadir
+      annotations:
+        volume.beta.kubernetes.io/storage-class: "ceph-web"
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+  name: mysql-svc
+  namespace: lnmp
+  labels:
+    app: mysql
+    tier: data
+spec:
+  selector:
+    app: mysql
+  ports:
+  - port: 3306
+    targetPort: 3306
+    name: mysql
+  clusterIP: None

@@ -1,3 +1,4 @@
+# ansible-playbook -i lists_k8s main.yml -e "host=all" -t init,docker,etcd,k8s-bin,kube-router
 # ansible-playbook -i lists_k8s main.yml -e "host=all" -t init,docker,k8s
 # ansible-playbook -i lists_k8s main.yml -e "host=all" -t etcd
 # ansible-playbook -i lists_k8s main.yml -e "host=all" -t flannel

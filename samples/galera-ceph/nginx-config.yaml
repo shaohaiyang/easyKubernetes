@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config-vol
+  namespace: lnmp
+  labels:
+    app: nginx
+data:
+  default.conf: |
+    server {
+      listen 80;
+      server_name "";
+
+      root /usr/html;
+      index index.php index.html index.htm;
+
+      error_page 404 /404.html;
+      location = /40x.html {
+      }
+
+      error_page 500 502 503 504 /50x.html;
+      location = /50x.html {
+      }
+
+      location ~.*.(js|css|html|png|jpg|gif|mp4|svg|apk|pbk)$ {
+              expires 7d;
+      }
+
+      location ~ \.php$ {
+              fastcgi_pass  php-svc:9000;
+              fastcgi_index index.php;
+              include fastcgi_params;
+              fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+      }
+    }
+

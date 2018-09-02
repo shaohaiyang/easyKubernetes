@@ -1,0 +1,34 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+   name: ceph-web
+provisioner: kubernetes.io/rbd
+parameters:
+  monitors: 192.168.146.11,192.168.146.12,192.168.146.13,192.168.146.14
+  adminId: admin
+  adminSecretName: ceph-secret
+  adminSecretNamespace: lnmp
+  pool: rbd
+  userId: admin
+  userSecretName: ceph-secret
+  fsType: xfs
+  imageFormat: "1"
+  imageFeatures: "layering"
+
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+   name: ceph-redis
+provisioner: kubernetes.io/rbd
+parameters:
+  monitors: 192.168.146.11,192.168.146.12,192.168.146.13,192.168.146.14
+  adminId: admin
+  adminSecretName: ceph-secret
+  adminSecretNamespace: lnmp
+  pool: rbd
+  userId: admin
+  userSecretName: ceph-secret
+  fsType: xfs
+  imageFormat: "1"
+  imageFeatures: "layering"
