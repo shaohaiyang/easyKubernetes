@@ -1,17 +1,66 @@
-# Kubernetes with ansible playbook and kubeadm toolkit
+#########################################################################
+# dnsmasq configure
+# 192.168.13.142  master.service.upyun
+# 192.168.13.142  registry.service.upyun
 
-## 使用yum方式部署docker和k8s组件（包含以下的etcd,flannel）
+#########################################################################
+# ansible-playbook -i lists_k8s main.yml -e "host=all" -t init,etcd
+# tags:
+# - docker (包含在init)
+# - k8s (k8s包括了etcd,flannel)
+# - etcd
+# - flannel
+# - kubeadm (使用官方的工具安装k8s)
+# - k8s-bin (下载安装kubernetes二进制)
+# - kube-router (新型的集大成者网络框架)
 
-`ansible-playbook -i lists_k8s main.yml -e "host=all" -t init,docker,k8s`
+#########################################################################
+# grub2-set-default "`sed -r -n "s/^menuentry '(.*)' --class.*/\1/p" /boot/grub2/grub.cfg|grep 4.17`"
+# grub2-mkconfig -o /boot/grub2/grub.cfg
 
-## 使用yum方式单独部署 etcd cluster
+#########################################################################
+# docker pull registry:2
+# docker run -tid --restart=always -p 5000:5000 --name registry -v /data/registry:/var/lib/registry registry:2 
+# 将registry的数据卷与本地关联，便于管理和备份registry数据
+# docker pull nginx # 从外网registry拉一个nginx镜像过来
+# docker tag nginx registry.service.upyun:5000/nginx # 为本地镜像打tag
+# docker push registry.service.upyun:5000/nginx # 推送至本地registry
+# docker rmi registry.service.upyun:5000/nginx # 删除本地镜像
 
-`ansible-playbook -i lists_k8s main.yml -e "host=all" -t etcd`
+# !!! 注意这个pause 镜像能够正常下载
+# KUBELET_POD_INFRA_CONTAINER="--pod-infra-container-image=gcr.io/google_containers/pause-amd64:3.0"
+# KUBELET_POD_INFRA_CONTAINER="--pod-infra-container-image=docker.io/kubernetes/pause:latest"
 
-## 使用yum方式单独部署 flannel
+#########################################################################
+# kubeadm toolkit
+# curl -s -L -o /bin/cfssl https://pkg.cfssl.org/R1.2/cfssl_linux-amd64
+# curl -s -L -o /bin/cfssljson https://pkg.cfssl.org/R1.2/cfssljson_linux-amd64
+# curl -s -L -o /bin/cfssl-certinfo https://pkg.cfssl.org/R1.2/cfssl-certinfo_linux-amd64
+# chmod +x /bin/cfssl*
+# yum makecache fast
+# yum --enablerepo=docker-ce-stable  --showduplicates list docker-ce
+# yum --enablerepo=kubernetes install -y kubelet kubeadm kubectl 
+# yum --enablerepo=docker-ce-stable --enablerepo=kubernetes install docker-ce-17.03.2.ce-1.el7.centos kubelet kubeadm kubectl
+# kubeadm init --kubernetes-version=v1.10.3 --pod-network-cidr=10.10.0.0/16 --apiserver-advertise-address=0.0.0.0 # 初始化集群
+# kubectl apply -f https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n') # 安装weave网络
+# kubectl apply -f http://mirror.faasx.com/kubernetes/installation/hosted/kubeadm/1.7/calico.yaml # 安装calico网络
+# kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml # 安装flannel网络
+# kubectl taint nodes k8s-m1 node-role.kubernetes.io/master- # 允许master参与工作负载分担
 
-`ansible-playbook -i lists_k8s main.yml -e "host=all" -t flannel`
+# 安装dashboard & heapster
+# kubectl apply -f http://mirror.faasx.com/kubernetes/dashboard/master/src/deploy/recommended/kubernetes-dashboard.yaml
+# kubectl create -f http://mirror.faasx.com/kubernetes/heapster/deploy/kube-config/influxdb/influxdb.yaml
+# kubectl create -f http://mirror.faasx.com/kubernetes/heapster/deploy/kube-config/influxdb/grafana.yaml
+# kubectl create -f http://mirror.faasx.com/kubernetes/heapster/deploy/kube-config/influxdb/heapster.yaml
+# kubectl create -f http://mirror.faasx.com/kubernetes/heapster/deploy/kube-config/rbac/heapster-rbac.yaml
+# kubectl -n kube-system edit service kubernetes-dashboard # 修改dashboard，暴露端口
+# kubectl -n kube-system get service kubernetes-dashboard # 获取随机端口
 
-## 使用 kubeadm方式部署指定版本的k8s（此方式官方推荐，但仍在开发中）
+# 创建admin-user账号和权限，用于访问 dashboard
+# kubectl create -f admin-user.yaml
+# kubectl create -f admin-user-role-binding.yaml
+# kubectl -n kube-system describe secret $(kubectl -n kube-system get secret | grep admin-user | awk '{print $1}')
 
-`ansible-playbook -i lists_k8s main.yml -e "host=all" -t init,kubeadm`
+# --authorization-mode=RBAC
+# kubectl get clusterrolebindings -o wide --all-namespaces
+# kubectl create clusterrolebinding kubelet-node-clusterbinding --clusterrole=system:node --user=system:node:k8s-m1

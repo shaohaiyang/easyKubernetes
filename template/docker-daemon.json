@@ -1,5 +1,6 @@
 {
   "storage-driver": "overlay2",
   "log-driver": "journald",
+  "log-level": "error",
   "signature-verification": false
 }

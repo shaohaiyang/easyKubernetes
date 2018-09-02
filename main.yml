@@ -6,17 +6,22 @@
       ignore_errors: yes 
       tags: init
 
+    - name: 0. check components
+      shell: |
+        docker info|grep -E "Storage Driver|d_type|Driver|Kernel|Operating"
+      tags: check
+
     - name: 1. template /etc/hosts
       template: src=template/hosts.j2 dest=/tmp/hosts
       tags: init
 
     - name: 1. adjuest centos7 system
-      shell: 
+      shell: |
         setenforce 0;
         timedatectl set-timezone Asia/Shanghai;
         timedatectl set-ntp 0;
         timedatectl set-local-rtc 0;
-        ntpdate -u -o3 192.168.12.10; 
+        ntpdate -u -o3 192.168.147.20; 
         swapoff -a;
         sed -r -i "/k8s/d" /etc/hosts;  
         cat /tmp/hosts >> /etc/hosts;
@@ -26,13 +31,14 @@
         echo -e "{{inventory_hostname}}" > /etc/hostname;
         echo -e 'LANG=en_US.utf8\nLC_CTYPE=en_US.utf8' > /etc/locale.conf;
         echo -e '*\t\tsoft\t\tnproc\t\t10240\nroot\t\tsoft\t\tproc\t\tunlimited' > /etc/security/limits.d/20-nproc.conf;
-        echo -e '0 * * * * root (/usr/sbin/ntpdate -u -o3 192.168.12.10 211.115.194.21 133.100.11.8)' > /etc/cron.d/upyun;
-        echo -e 'nameserver 192.168.12.10\nnameserver 192.168.21.20' > /etc/resolv.conf;
+        echo -e '0 * * * * root (/usr/sbin/ntpdate -u -o3 192.168.147.20 211.115.194.21 133.100.11.8)' > /etc/cron.d/upyun;
+        echo -e 'nameserver 192.168.147.20\nnameserver 192.168.21.20' > /etc/resolv.conf;
         echo -e 'net.bridge.bridge-nf-call-ip6tables = 1\nnet.bridge.bridge-nf-call-iptables = 1\nvm.swappiness=0' > /etc/sysctl.d/k8s.conf;
         sed -r -i '/obsoletes/s^=.*^=0^g' /etc/yum.conf;
         sed -r -i '/update_hostname/s@^@#@g' /etc/cloud/cloud.cfg;
         sed -r -i 's/SELINUX=.*/SELINUX=disabled/g' /etc/selinux/config;
-        sed -r -i --follow-symlinks 's/SELINUX=.*/SELINUX=disabled/g' /etc/sysconfig/selinux
+        sed -r -i 's/weekly/daily/g;s/^rotate.*/rotate 7/g;s/#compress/compress/g' /etc/logrotate.conf;
+        sed -r -i --follow-symlinks 's/SELINUX=.*/SELINUX=disabled/g' /etc/sysconfig/selinux;
         sed -r -i '/^[^root]/s:/bin/bash:/sbin/nologin:g' /etc/passwd;
         sed -r -i '/#Port 22/s^.*^Port 65422^g;/^PasswordAuthentication/s^yes^no^g' /etc/ssh/sshd_config;
         sed -r -i -e '/DefaultLimitCORE/s^.*^DefaultLimitCORE=infinity^g' -e '/DefaultLimitNOFILE/s^.*^DefaultLimitNOFILE=100000^g' -e '/DefaultLimitNPROC/s^.*^DefaultLimitNPROC=100000^g' /etc/systemd/system.conf;
@@ -55,11 +61,15 @@
         - telnet
         - bc
         - nc
+        - socat
         - net-tools
+        - nfs-utils
+        - rpcbind
         - wget
         - lsof
         - rsync
         - bash-completion
+        - irqbalance
         - iptables-services
         - ipset
         - ipvsadm
@@ -99,6 +109,30 @@
         - kubectl
       tags: kubeadm
 
+    - name: 3. install cni plugins latest
+      shell: |
+        CNI="/root/cni-plugins.tgz"
+        mkdir -p /etc/cni/net.d /opt/cni/bin /etc/kubernetes/ssl/
+        [ -s $CNI ] || (wget -c {{CNI_Repo}} -O $CNI;tar xvf $CNI -C /opt/cni/bin/)
+      tags:
+        - k8s-bin
+        - kube-router
+
+    - name: 3. install coredns replace kube-dns
+      shell: |
+        DIR="/root/coredns"
+        mkdir -p $DIR && cd $DIR
+        wget -c https://raw.githubusercontent.com/coredns/deployment/master/kubernetes/coredns.yaml.sed
+        wget -c https://raw.githubusercontent.com/coredns/deployment/master/kubernetes/deploy.sh
+        chmod +x deploy.sh
+        $DIR/deploy.sh -i {{ DNS_cluster_ip }} -d "{{ KUBE_Service_Domain }}" > $DIR/coredns.yaml
+        #kubectl apply -f coredns.yml
+      tags:
+        - k8s-bin
+        - kube-router
+      when:
+        K8S == "master" or K8S == "both"
+
     - name: 4. config kubelet setting
       shell:
         sed -r -i '/Environment="KUBELET_CGROUP_ARGS=/s^.*^Environment="KUBELET_CGROUP_ARGS=--cgroup-driver=systemd --runtime-cgroups=/systemd/system.slice --kubelet-cgroups=/systemd/system.slice"^g' /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
@@ -106,16 +140,21 @@
         systemctl enable kubelet;
       tags: kubeadm
 
-    - name: 4. config docker setting
-      shell:
-        cp -a /lib/systemd/system/docker.service /etc/systemd/system/docker.service;
-        sed -r -i "s|ExecStart=/usr/bin/docker-current .*|ExecStart=/usr/bin/docker-current daemon --registry-mirror={{Docker_Mirror}} \\\\|g" /etc/systemd/system/docker.service;
-        sed -r -i "/ExecStartPost=.*iptables -I FORWARD -s 0.0.0.0.*-j ACCEPT/d" /etc/systemd/system/docker.service;
-        sed -r -i "/ExecStart=/i ExecStartPost=/usr/sbin/iptables -I FORWARD -s 0.0.0.0/0 -j ACCEPT" /etc/systemd/system/docker.service;
-        sed -r -i "s/native.cgroupdriver=.*/native.cgroupdriver=systemd \\\\/g" /etc/systemd/system/docker.service;
-        ln -snf /usr/libexec/docker/docker-runc-current /usr/local/bin/docker-runc;
-        systemctl daemon-reload;
-        systemctl enable docker;
+    - name: 4. config docker and kernel-ml setting
+      shell: |
+        cp -a /lib/systemd/system/docker.service /etc/systemd/system/docker.service
+        sed -r -i "s|ExecStart=/usr/bin/docker-current .*|ExecStart=/usr/bin/docker-current daemon --registry-mirror={{Docker_Mirror}} \\\\|g" /etc/systemd/system/docker.service
+        sed -r -i "/ExecStartPost=.*iptables -I FORWARD -s 0.0.0.0.*-j ACCEPT/d" /etc/systemd/system/docker.service
+        sed -r -i "/ExecStart=/i ExecStartPost=/usr/sbin/iptables -I FORWARD -s 0.0.0.0/0 -j ACCEPT" /etc/systemd/system/docker.service
+        sed -r -i "s/native.cgroupdriver=.*/native.cgroupdriver=systemd \\\\/g" /etc/systemd/system/docker.service
+        ln -snf /usr/libexec/docker/docker-runc-current /usr/local/bin/docker-runc
+        systemctl daemon-reload
+        systemctl enable docker
+        echo "options ip_vs conn_tab_bits=20" > /etc/modprobe.d/ipvs.conf
+        Version=`yum info kernel-ml|awk -F: '/Version/{print $2}'`
+        Menu=`sed -r -n "s/^menuentry '(.*)' --class.*/\1/p" /boot/grub2/grub.cfg|grep $Version`
+        grub2-set-default "$Menu"
+        grub2-mkconfig -o /boot/grub2/grub.cfg
       tags:
         - init
         - docker
@@ -151,6 +190,35 @@
       template: src=template/kube-apiserver.j2 dest=/etc/kubernetes/apiserver
       tags:
         - k8s
+        - k8s-bin
+        - kube-router
+      when:
+        K8S == "master" or K8S == "both"
+
+    - name: 4. template kube-controller-manager config
+      template: src=template/kube-controller-manager.j2 dest=/etc/kubernetes/controller-manager
+      tags:
+        - k8s
+        - k8s-bin
+        - kube-router
+      when:
+        K8S == "master" or K8S == "both"
+
+    - name: 4. template kube-scheduler config
+      template: src=template/kube-scheduler.j2 dest=/etc/kubernetes/scheduler
+      tags:
+        - k8s
+        - k8s-bin
+        - kube-router
+      when:
+        K8S == "master" or K8S == "both"
+
+    - name: 4. template mkkubeconfig.sh
+      template: src=template/mkkubeconfig.sh.j2 dest=/etc/kubernetes/mkkubeconfig.sh mode=0755
+      tags:
+        - k8s
+        - k8s-bin
+        - kube-router
       when:
         K8S == "master" or K8S == "both"
 
@@ -158,13 +226,15 @@
       template: src=template/kube-config.j2 dest=/etc/kubernetes/config
       tags:
         - k8s
-      when:
-        K8S == "master" or K8S == "slave" or K8S == "both"
+        - k8s-bin
+        - kube-router
 
     - name: 4. template kubelet config
       template: src=template/kubelet.j2 dest=/etc/kubernetes/kubelet
       tags:
         - k8s
+        - k8s-bin
+        - kube-router
       when:
         K8S == "slave" or K8S == "both"
 
@@ -172,6 +242,8 @@
       template: src=template/master-apiconfig.yaml.j2 dest=/etc/kubernetes/master-apiconfig.yaml
       tags:
         - k8s
+        - k8s-bin
+        - kube-router
       when:
         K8S == "slave" or K8S == "both"
 
@@ -180,8 +252,6 @@
       with_items:
         - firewalld
         - postfix
-        - auditd
-        - tuned
       ignore_errors: yes 
       tags:
         - init
@@ -224,6 +294,15 @@
         - irqbalance
         - docker
 
+    - name: 5. enable flannel service
+      service: name={{item}} state=restarted enabled=yes
+      tags:
+        - k8s
+        - flannel
+      with_items:
+        - flanneld
+      ignore_errors: yes 
+
     - name: 5. enable service
       service: name={{item}} state=restarted enabled=yes
       tags:
@@ -249,62 +328,124 @@
       when:
         K8S == "slave" or K8S == "both"
 
+    - name: 0. copy k8s ssl pem
+      shell: K8S_SSL="/root/k8s-ssl.tgz"; [ -s $K8S_SSL ] || (wget -c {{K8S_SSL_Repo}} -O $K8S_SSL;tar xvf $K8S_SSL -C /)
+      tags:
+        - k8s-bin
+      ignore_errors: yes 
+
+    - name: 1. add user kube
+      shell: groupadd kube ; useradd -g kube -n -s /sbin/nologin -M -d / -c "Kubernetes user" kube
+      tags:
+        - k8s-bin
+      ignore_errors: yes 
+
     - name: 1. stop service
-      service: name={{item}} state=stopped enabled=yes
-      tags:
-        - kube-router
+      service: name={{item}} state=stopped enabled=no
       with_items:
         - kube-apiserver
         - kube-controller-manager
         - kube-scheduler
-        - kube-proxy
         - kubelet
       ignore_errors: yes 
-      when:
-        K8S == "slave" or K8S == "both"
-
-    - name: 2. update kubelet config
-      shell: sed -r -i -e '/api-servers/s@^@#@g' -e '/master-apiconfig/s@#@@g' /etc/kubernetes/kubelet
       tags:
+        - k8s-bin
         - kube-router
-      when:
-        K8S == "slave" or K8S == "both"
 
-    - name: 3. copy kubernetes latest 
-      copy: src=k8s-latest/{{item}} dest=/usr/bin/ mode=0755
-      with_items:
-        - kube-apiserver
-        - kube-controller-manager
-        - kube-scheduler
-        - kube-proxy
-        - kube-aggregator
-        - kubelet
-        - kubectl
+    - name: 2. copy kubernetes latest 
+      shell: |
+        K8S_BIN="/root/k8s-bin.tgz"; [ -s $K8S_BIN ] || (wget -c {{K8S_BIN_Repo}} -O $K8S_BIN;tar xvf $K8S_BIN -C /);
+        ISTIO_BIN="/root/istio-bin.tgz"; [ -s $ISTIO_BIN ] || (wget -c {{ISTIO_Repo}} -O $ISTIO_BIN;tar xvf $ISTIO_BIN -C /);
       tags:
-        - kube-router
-      when:
-        K8S == "slave" or K8S == "both"
+        - k8s-bin
+      ignore_errors: yes 
 
-    - name: 4. start service
-      service: name={{item}} state=started enabled=yes
+    - name: 2. sync service yaml files
+      copy: src=service dest=/root/
       tags:
+        - k8s-bin
         - kube-router
-      with_items:
-        - kube-proxy
-        - kubelet
       ignore_errors: yes 
       when:
+        K8S == "master" or K8S == "both"
+
+    - name: 3. update apiserver config
+      shell: |
+        chmod -R 0755 /etc/kubernetes/ssl/
+        APICONF="/etc/kubernetes/apiserver"
+        sed -r -i '/KUBE_API_ARGS=/s@^@#@g' $APICONF
+        sed -r -i '/tls-cert-file/s@^#*@@g' $APICONF
+        CONTRLCONF="/etc/kubernetes/controller-manager"
+        sed -r -i '/KUBE_CONTROLLER_MANAGER_ARGS=/s@^@#@g' $CONTRLCONF
+        sed -r -i '/cluster-signing-cert-file/s@^#*@@g' $CONTRLCONF
+      tags:
+        - k8s-bin
+        - kube-router
+      ignore_errors: yes 
+      when:
+        K8S == "master" or K8S == "both"
+
+    - name: 3. update kubelet config
+      shell: |
+        CONF="/etc/kubernetes/kubelet"
+        sed -r -i -e '/api-servers/s@^@#@g' -e '/master-apiconfig/s@^#*@@g' -e '/KUBELET_ARGS/s@^@#@g' $CONF
+        sed -r -i '/bootstrap-kubeconfig/s@^#*@@g' $CONF
+      tags:
+        - k8s-bin
+      when:
         K8S == "slave" or K8S == "both"
 
-    - name: 4. start service
-      service: name={{item}} state=started enabled=yes
+    - name: 3. update kubelet config
+      shell: |
+        CONF="/etc/kubernetes/kubelet"
+        sed -r -i -e '/api-servers/s@^@#@g' -e '/master-apiconfig/s@^#*@@g' -e '/KUBELET_ARGS/s@^@#@g' $CONF
+        sed -r -i '/bootstrap-kubeconfig/s@(.*)"$@\1 --network-plugin=cni --cni-conf-dir=/etc/cni/net.d/ --cni-bin-dir=/opt/cni/bin"@g' $CONF
+        sed -r -i '/bootstrap-kubeconfig/s@^#*@@g' $CONF
       tags:
         - kube-router
+      when:
+        K8S == "slave" or K8S == "both"
+
+    - name: 5. start node service
+      service: name={{item}} state=started enabled=yes
+      tags:
+        - k8s-bin
+        - kube-router
       with_items:
+        - kubelet
+        - kube-proxy
         - flanneld
+      ignore_errors: yes 
+      when:
+        K8S == "slave" or K8S == "both"
+
+    - name: 5. stop node service
+      service: name={{item}} state=stopped enabled=no
+      tags:
+        - kube-router
+      with_items:
+        - kube-proxy
+        - flanneld
+      ignore_errors: yes 
+
+    - name: 6. start master service
+      service: name={{item}} state=started enabled=yes
+      tags:
+        - k8s-bin
+        - kube-router
+      with_items:
         - kube-apiserver
         - kube-controller-manager
         - kube-scheduler
       ignore_errors: yes
+      when:
+        K8S == "master" or K8S == "both"
+
+    - name: 7. kubectl clusterrolebinding
+      shell: kubectl create clusterrolebinding kubelet-bootstrap --clusterrole=system:node-bootstrapper --user=kubelet-bootstrap;
+      tags:
+        - kube-router
+        - k8s-bin
+      ignore_errors: yes 
       when:
         K8S == "master" or K8S == "both"

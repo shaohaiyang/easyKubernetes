@@ -14,8 +14,8 @@ KUBE_ETCD_SERVERS="--etcd-servers={% for host in groups["K8S"] %}{% if hostvars[
 KUBE_SERVICE_ADDRESSES="--service-cluster-ip-range={{ Service_cluster_cidr }}"
 
 # default admission control policies
-KUBE_ADMISSION_CONTROL="--admission-control=NamespaceLifecycle,NamespaceExists,LimitRanger,SecurityContextDeny,ResourceQuota,ServiceAccount"
+KUBE_ADMISSION_CONTROL="--admission-control={{ KUBE_ADMISSION_CONTROL }}"
 
 # Add your own!
 KUBE_API_ARGS="--anonymous-auth=false"
-#KUBE_API_ARGS="--anonymous-auth=false --service-node-port-range=30000-60000 --enable-bootstrap-token-auth --token-auth-file=/etc/kubernetes/token.kubeconfig --tls-cert-file=/etc/kubernetes/ssl/k8s.pem --tls-private-key-file=/etc/kubernetes/ssl/k8s-key.pem --client-ca-file=/etc/kubernetes/ssl/ca.pem --service-account-key-file=/etc/kubernetes/ssl/ca-key.pem"
+#KUBE_API_ARGS="--anonymous-auth=false --runtime-config={{ KUBE_RUNTIME_CONFIG }} --service-node-port-range={{ Service_ports }} --enable-bootstrap-token-auth --token-auth-file=/etc/kubernetes/token.kubeconfig --tls-cert-file=/etc/kubernetes/ssl/k8s.pem --tls-private-key-file=/etc/kubernetes/ssl/k8s-key.pem --client-ca-file=/etc/kubernetes/ssl/ca.pem --service-account-key-file=/etc/kubernetes/ssl/ca-key.pem"

@@ -4,7 +4,5 @@
 # defaults from config and apiserver should be adequate
 
 # Add your own!
-KUBE_CONTROLLER_MANAGER_ARGS="--allocate-node-cidrs=false --service-cluster-ip-range={{ Service_cluster_cidr }} --cluster-cidr={{ Cluster_cidr }}"
-
-# not sure below
-#--cluster-signing-cert-file=/etc/kubernetes/ssl/ca.pem --cluster-signing-key-file=/etc/kubernetes/ssl/ca-key.pem  --service-account-private-key-file=/etc/kubernetes/ssl/ca-key.pem --root-ca-file=/etc/kubernetes/ssl/ca.pem --leader-elect=true"
+KUBE_CONTROLLER_MANAGER_ARGS="--allocate-node-cidrs=false --leader-elect=true --service-cluster-ip-range={{ Service_cluster_cidr }} --cluster-cidr={{ Cluster_cidr }}" 
+#KUBE_CONTROLLER_MANAGER_ARGS="--allocate-node-cidrs=true --leader-elect=true --service-cluster-ip-range={{ Service_cluster_cidr }} --cluster-cidr={{ Cluster_cidr }} --cluster-signing-cert-file=/etc/kubernetes/ssl/ca.pem --cluster-signing-key-file=/etc/kubernetes/ssl/ca-key.pem  --service-account-private-key-file=/etc/kubernetes/ssl/ca-key.pem --root-ca-file=/etc/kubernetes/ssl/ca.pem"

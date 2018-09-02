@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: nginx
 spec:
-  replicas: 6
+  replicas: 3
   template:
     metadata:
       labels:
@@ -21,4 +21,15 @@ spec:
             cpu: "1"
           requests:
             #cpu: 500m
-            cpu: 0.5
+            cpu: 0.3
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: cpu
+                operator: In
+                values:
+                - high
+                - mid
+
