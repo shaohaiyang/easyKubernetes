@@ -19,18 +19,21 @@
       shell: |
         setenforce 0;
         timedatectl set-timezone Asia/Shanghai;
-        timedatectl set-ntp 0;
+        timedatectl set-ntp 1;
         timedatectl set-local-rtc 0;
         ntpdate -u -o3 192.168.147.20; 
         swapoff -a;
         sed -r -i "/k8s/d" /etc/hosts;  
         cat /tmp/hosts >> /etc/hosts;
-        hostnamectl --static set-hostname "{{inventory_hostname}}";  
+        hostnamectl --static set-hostname "{{inventory_hostname}}";
+        hostnamectl --pretty set-hostname "{{inventory_hostname}}";
+        hostnamectl --transient set-hostname "{{inventory_hostname}}";
+        echo "{{inventory_hostname}}" > /proc/sys/kernel/hostname;
         localectl set-locale LANG=en_US.UTF8;
         chattr -i /etc/resolv.conf;
         echo -e "{{inventory_hostname}}" > /etc/hostname;
         echo -e 'LANG=en_US.utf8\nLC_CTYPE=en_US.utf8' > /etc/locale.conf;
-        echo -e '*\t\tsoft\t\tnproc\t\t10240\nroot\t\tsoft\t\tproc\t\tunlimited' > /etc/security/limits.d/20-nproc.conf;
+        echo -e '*\t\tsoft\t\tnproc\t\t10240\nroot\t\tsoft\t\tnproc\t\tunlimited' > /etc/security/limits.d/20-nproc.conf;
         echo -e '0 * * * * root (/usr/sbin/ntpdate -u -o3 192.168.147.20 211.115.194.21 133.100.11.8)' > /etc/cron.d/upyun;
         echo -e 'nameserver 192.168.147.20\nnameserver 192.168.21.20' > /etc/resolv.conf;
         echo -e 'net.bridge.bridge-nf-call-ip6tables = 1\nnet.bridge.bridge-nf-call-iptables = 1\nvm.swappiness=0' > /etc/sysctl.d/k8s.conf;
@@ -42,6 +45,7 @@
         sed -r -i '/^[^root]/s:/bin/bash:/sbin/nologin:g' /etc/passwd;
         sed -r -i '/#Port 22/s^.*^Port 65422^g;/^PasswordAuthentication/s^yes^no^g' /etc/ssh/sshd_config;
         sed -r -i -e '/DefaultLimitCORE/s^.*^DefaultLimitCORE=infinity^g' -e '/DefaultLimitNOFILE/s^.*^DefaultLimitNOFILE=100000^g' -e '/DefaultLimitNPROC/s^.*^DefaultLimitNPROC=100000^g' /etc/systemd/system.conf;
+        sed -r -i -e '/Compress=/s@.*@Compress=yes@g; /SystemMaxUse=/s@.*@SystemMaxUse=4G@g; ' -e '/SystemMaxFileSize=/s@.*@SystemMaxFileSize=256M@g; /MaxRetentionSec=/s@.*@MaxRetentionSec=2week@g' /etc/systemd/journald.conf
         chattr +i /etc/resolv.conf;
       tags: init
 
