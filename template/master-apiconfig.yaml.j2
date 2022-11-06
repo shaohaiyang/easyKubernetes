@@ -3,7 +3,11 @@ kind: Config
 clusters:
 - name: local
   cluster:
+{% if TLS_APISERVER == "https" %}
+    server: https://{{Master}}:6443
+{% else %}
     server: http://{{Master}}:8080
+{% endif %}
 users:
 - name: kubelet
 contexts:

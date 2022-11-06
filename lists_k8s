@@ -1,25 +1,34 @@
 [K8S]
-k8s-m1 ansible_ssh_host=192.168.13.142 ETCD="yes" K8S="both"
-k8s-n1 ansible_ssh_host=192.168.13.145 ETCD="yes" K8S="slave"
-k8s-n2 ansible_ssh_host=192.168.13.167 ETCD="yes" K8S="slave"
-k8s-n3 ansible_ssh_host=192.168.13.173 ETCD="no" K8S="slave"
+k8s-m1 ansible_ssh_port=65422 ansible_ssh_host=192.168.13.134 ETCD="yes" K8S="both"
+k8s-n2 ansible_ssh_port=65422 ansible_ssh_host=192.168.13.137 ETCD="yes" K8S="slave"
+k8s-n3 ansible_ssh_port=65422 ansible_ssh_host=192.168.13.140 ETCD="yes" K8S="slave"
 
 [K8S:vars]
 Master="master.service.upyun"
-Cluster_cidr="10.10.0.0/16"
-Service_cluster_cidr="10.254.0.0/16"
-DNS_cluster_ip="10.254.0.254"
-Service_ports="30000-65000"
-Docker_Opts="-g /disk/ssd1/docker" 
 Docker_Registry="registry.service.upyun:5000"
 Docker_Mirror="https://registry.docker-cn.com"
-KUBE_ADMISSION_CONTROL="NamespaceLifecycle,NamespaceExists,LimitRanger,ResourceQuota,ServiceAccount"
-KUBE_RUNTIME_CONFIG="rbac.authorization.k8s.io/v1alpha1=true,settings.k8s.io/v1alpha1=true"
+Extra_dir="/disk/ssd1"
+
+# enable https with cfssl
+TLS_ETCD="https"
+TLS_APISERVER="https"
+TLS_CONTROL_SCHEDULER="https"
+
+Cluster_cidr="10.10.0.0/16"
+Service_cluster_cidr="10.254.0.0/16"
+Service_cluster_ip="10.254.0.1"
+DNS_cluster_ip="10.254.0.254"
+Service_ports="30000-65000"
+
+# SecurityContextDeny -> RunAsUser is forbidden
+KUBE_ADMISSION_CONTROL="NamespaceLifecycle,NamespaceExists,LimitRanger,ResourceQuota,ServiceAccount,NodeRestriction"
+KUBE_RUNTIME_CONFIG="rbac.authorization.k8s.io/v1=true"
 KUBE_Eviction_Thresholds="memory.available<100Mi"
 KUBE_System_Reserved="cpu=100mi,memory=100Mi"
 KUBE_Service_Domain="cluster.local"
+
 # Don't change it
-K8S_SSL_Repo="http://ntpdate.c.upyun.com/upyun.k8s.pem.tgz"
-K8S_BIN_Repo="http://ntpdate.c.upyun.com/upyun.k8s.bin.tgz"
-ISTIO_Repo="http://ntpdate.c.upyun.com/upyun.k8s.istio.tgz"
-CNI_Repo="http://ntpdate.c.upyun.com/cni-plugins-amd64-v0.7.1.tgz"
+K8S_SSL_Repo="http://shaohaiyang.github.com/upyun.k8s.pem.tgz"
+K8S_BIN_Repo="http://shaohaiyang.github.com/upyun.k8s.bin.1.23.tgz"
+ISTIO_Repo="http://shaohaiyang.github.com/upyun.k8s.istio.tgz"
+CNI_Repo="http://shaohaiyang.github.com/cni-plugins-linux-amd64-v0.8.0.tgz"

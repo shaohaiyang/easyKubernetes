@@ -4,5 +4,8 @@
 # defaults from config and apiserver should be adequate
 
 # Add your own!
-KUBE_CONTROLLER_MANAGER_ARGS="--allocate-node-cidrs=false --leader-elect=true --service-cluster-ip-range={{ Service_cluster_cidr }} --cluster-cidr={{ Cluster_cidr }}" 
-#KUBE_CONTROLLER_MANAGER_ARGS="--allocate-node-cidrs=true --leader-elect=true --service-cluster-ip-range={{ Service_cluster_cidr }} --cluster-cidr={{ Cluster_cidr }} --cluster-signing-cert-file=/etc/kubernetes/ssl/ca.pem --cluster-signing-key-file=/etc/kubernetes/ssl/ca-key.pem  --service-account-private-key-file=/etc/kubernetes/ssl/ca-key.pem --root-ca-file=/etc/kubernetes/ssl/ca.pem"
+{% if TLS_CONTROL_SCHEDULER == "https" %}
+KUBE_CONTROLLER_MANAGER_ARGS="--allocate-node-cidrs=true --leader-elect=true --service-cluster-ip-range={{ Service_cluster_cidr }} --cluster-cidr={{ Cluster_cidr }} --cluster-signing-cert-file=/etc/kubernetes/ssl/ca.pem --cluster-signing-key-file=/etc/kubernetes/ssl/ca-key.pem  --service-account-private-key-file=/etc/kubernetes/ssl/ca-key.pem --root-ca-file=/etc/kubernetes/ssl/ca.pem --allocate-node-cidrs=true --leader-elect=true --service-cluster-ip-range=10.254.0.0/16 --tls-cert-file=/etc/kubernetes/ssl/kube-controller.pem --tls-private-key-file=/etc/kubernetes/ssl/kube-controller-key.pem --use-service-account-credentials=true --kubeconfig=/etc/kubernetes/controller-manager.kubeconfig" 
+{% else %}
+KUBE_CONTROLLER_MANAGER_ARGS="--allocate-node-cidrs=true --leader-elect=true --service-cluster-ip-range={{ Service_cluster_cidr }} --cluster-cidr={{ Cluster_cidr }} --cluster-signing-cert-file=/etc/kubernetes/ssl/ca.pem --cluster-signing-key-file=/etc/kubernetes/ssl/ca-key.pem  --service-account-private-key-file=/etc/kubernetes/ssl/ca-key.pem --root-ca-file=/etc/kubernetes/ssl/ca.pem --allocate-node-cidrs=true --leader-elect=true --service-cluster-ip-range=10.254.0.0/16 --tls-cert-file=/etc/kubernetes/ssl/kube-controller.pem --tls-private-key-file=/etc/kubernetes/ssl/kube-controller-key.pem --use-service-account-credentials=true"
+{% endif %}

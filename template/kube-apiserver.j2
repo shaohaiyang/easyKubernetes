@@ -1,21 +1,24 @@
 # The address on the local server to listen to.
-KUBE_API_ADDRESS="--insecure-bind-address=0.0.0.0"
-
+KUBE_API_ADDRESS="--bind-address=0.0.0.0"
+{% if TLS_APISERVER == "https" %}
 # The port on the local server to listen on.
+KUBE_API_PORT="--secure-port=6443"
+{% else %}
 KUBE_API_PORT="--insecure-port=8080"
+{% endif %}
 
 # Port minions listen on
 KUBELET_PORT="--kubelet-port=10250"
 
 # Comma separated list of nodes in the etcd cluster
-KUBE_ETCD_SERVERS="--etcd-servers={% for host in groups["K8S"] %}{% if hostvars[host]["ETCD"] == "yes" %}http://{{ hostvars[host]["ansible_ssh_host"] }}:2379,{% endif %}{% endfor %}"
+KUBE_ETCD_SERVERS="--etcd-cafile=/etc/kubernetes/ssl/ca.pem --etcd-certfile=/etc/kubernetes/ssl/etcd.pem --etcd-keyfile=/etc/kubernetes/ssl/etcd-key.pem --etcd-servers={% for host in groups["K8S"] %}{% if hostvars[host]["ETCD"] == "yes" %}{{TLS_ETCD}}://{{ hostvars[host]["ansible_ssh_host"] }}:2379,{% endif %}{% endfor %}"
 
 # Address range to use for services
 KUBE_SERVICE_ADDRESSES="--service-cluster-ip-range={{ Service_cluster_cidr }}"
 
 # default admission control policies
-KUBE_ADMISSION_CONTROL="--admission-control={{ KUBE_ADMISSION_CONTROL }}"
+KUBE_ADMISSION_CONTROL="--enable-admission-plugins={{ KUBE_ADMISSION_CONTROL }}"
 
 # Add your own!
 KUBE_API_ARGS="--anonymous-auth=false"
-#KUBE_API_ARGS="--anonymous-auth=false --runtime-config={{ KUBE_RUNTIME_CONFIG }} --service-node-port-range={{ Service_ports }} --enable-bootstrap-token-auth --token-auth-file=/etc/kubernetes/token.kubeconfig --tls-cert-file=/etc/kubernetes/ssl/k8s.pem --tls-private-key-file=/etc/kubernetes/ssl/k8s-key.pem --client-ca-file=/etc/kubernetes/ssl/ca.pem --service-account-key-file=/etc/kubernetes/ssl/ca-key.pem"
+#KUBE_API_ARGS="--anonymous-auth=false --allow-privileged=true --authorization-mode=Node,RBAC --runtime-config=api/all=true --runtime-config={{ KUBE_RUNTIME_CONFIG }} --service-node-port-range={{ Service_ports }} --enable-bootstrap-token-auth --token-auth-file=/etc/kubernetes/token.kubeconfig --tls-cert-file=/etc/kubernetes/ssl/k8s.pem --tls-private-key-file=/etc/kubernetes/ssl/k8s-key.pem --client-ca-file=/etc/kubernetes/ssl/ca.pem --service-account-key-file=/etc/kubernetes/ssl/ca-key.pem --service-account-signing-key-file=/etc/kubernetes/ssl/ca-key.pem --service-account-issuer=kubernetes.default.svc" 
