@@ -1,0 +1,10 @@
+apiVersion: kubescheduler.config.k8s.io/v1
+kind: KubeSchedulerConfiguration
+clientConnection:
+  burst: 200
+  kubeconfig: "/etc/kubernetes/kube-scheduler.kubeconfig"
+  qps: 100
+enableContentionProfiling: false
+enableProfiling: true
+leaderElection:
+  leaderElect: true

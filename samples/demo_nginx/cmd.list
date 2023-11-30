@@ -1,0 +1,7 @@
+docker build -t "dong/php-fpm" --rm .
+docker login hub.holdcloud.com/aygzofaghw
+docker tag c648632c8bd4 hub.holdcloud.com/aygzofaghw/dong_nginx:v0.1
+docker push hub.upyun.com/hangzhou/dong-nginx:v0.1
+
+docker run -itd --name demo-nginx --restart=always -p 88:80 -v /root/demo_nginx/:/usr/html/ -v /root/demo_nginx/:/etc/nginx/conf.d/ smebberson/alpine-nginx
+docker run -itd --name demo-php --restart=always -p 9000:9000 -v /root/demo_nginx/:/usr/html/ hermsi/alpine-fpm-php:7.2.8

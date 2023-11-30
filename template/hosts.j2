@@ -1,3 +1,7 @@
 {% for host in groups["K8S"] %}
+{% if hostvars[host]["K8S"] == "slave" %}
 {{ hostvars[host]["ansible_ssh_host"] }}  {{ host }}
+{% else %}
+{{ hostvars[host]["ansible_ssh_host"] }}  {{ host }} master.service.upyun register.service.upyun
+{% endif %}
 {% endfor %}

@@ -1,11 +1,6 @@
 ---
 - hosts: "{{ host }}"
   tasks:
-    - stat: path=/etc/yum.repos.d/elrepo.repo
-      register: elrepo_result
-      ignore_errors: yes 
-      tags: init
-
     - name: 0. check components
       shell: |
         docker info|grep -E "Storage Driver|d_type|Driver|Kernel|Operating"
@@ -19,22 +14,20 @@
       shell: |
         setenforce 0;
         timedatectl set-timezone Asia/Shanghai;
-        timedatectl set-ntp 1;
+        timedatectl set-ntp 0;
         timedatectl set-local-rtc 0;
         ntpdate -u -o3 192.168.147.20; 
         swapoff -a;
         sed -r -i "/k8s/d" /etc/hosts;  
         cat /tmp/hosts >> /etc/hosts;
-        hostnamectl --static set-hostname "{{inventory_hostname}}";
-        hostnamectl --pretty set-hostname "{{inventory_hostname}}";
-        hostnamectl --transient set-hostname "{{inventory_hostname}}";
-        echo "{{inventory_hostname}}" > /proc/sys/kernel/hostname;
+        hostnamectl --static set-hostname "{{inventory_hostname}}";  
         localectl set-locale LANG=en_US.UTF8;
+        mkdir -p /etc/docker
         chattr -i /etc/resolv.conf;
         echo -e "{{inventory_hostname}}" > /etc/hostname;
         echo -e 'LANG=en_US.utf8\nLC_CTYPE=en_US.utf8' > /etc/locale.conf;
-        echo -e '*\t\tsoft\t\tnproc\t\t10240\nroot\t\tsoft\t\tnproc\t\tunlimited' > /etc/security/limits.d/20-nproc.conf;
-        echo -e '0 * * * * root (/usr/sbin/ntpdate -u -o3 192.168.147.20 211.115.194.21 133.100.11.8)' > /etc/cron.d/upyun;
+        echo -e '*\t\tsoft\t\tnproc\t\t10240\nroot\t\tsoft\t\tproc\t\tunlimited' > /etc/security/limits.d/20-nproc.conf;
+        echo -e '0 * * * * root (/usr/sbin/ntpdate -u -o3 192.168.147.20 ntp.aliyun.com 211.115.194.21)' > /etc/cron.d/upyun;
         echo -e 'nameserver 192.168.147.20\nnameserver 192.168.21.20' > /etc/resolv.conf;
         echo -e 'net.bridge.bridge-nf-call-ip6tables = 1\nnet.bridge.bridge-nf-call-iptables = 1\nvm.swappiness=0' > /etc/sysctl.d/k8s.conf;
         sed -r -i '/obsoletes/s^=.*^=0^g' /etc/yum.conf;
@@ -44,8 +37,8 @@
         sed -r -i --follow-symlinks 's/SELINUX=.*/SELINUX=disabled/g' /etc/sysconfig/selinux;
         sed -r -i '/^[^root]/s:/bin/bash:/sbin/nologin:g' /etc/passwd;
         sed -r -i '/#Port 22/s^.*^Port 65422^g;/^PasswordAuthentication/s^yes^no^g' /etc/ssh/sshd_config;
-        sed -r -i -e '/DefaultLimitCORE/s^.*^DefaultLimitCORE=infinity^g' -e '/DefaultLimitNOFILE/s^.*^DefaultLimitNOFILE=100000^g' -e '/DefaultLimitNPROC/s^.*^DefaultLimitNPROC=100000^g' /etc/systemd/system.conf;
-        sed -r -i -e '/Compress=/s@.*@Compress=yes@g; /SystemMaxUse=/s@.*@SystemMaxUse=4G@g; ' -e '/SystemMaxFileSize=/s@.*@SystemMaxFileSize=256M@g; /MaxRetentionSec=/s@.*@MaxRetentionSec=2week@g' /etc/systemd/journald.conf
+        sed -r -i -e '/DefaultLimitCORE=/s^.*^DefaultLimitCORE=infinity^g' -e '/DefaultLimitNOFILE=/s^.*^DefaultLimitNOFILE=100000^g' -e '/DefaultLimitNPROC=/s^.*^DefaultLimitNPROC=100000^g' /etc/systemd/system.conf;
+        sed -r -i '/Compress=/s@.*@Compress=yes@g;/SyncIntervalSec=/s@.*@SyncIntervalSec=5m@g;/RateLimitInterval=/s@.*@RateLimitInterval=30s@g;/RateLimitBurst=/s@.*@RateLimitBurst=1000@g;/SystemMaxUse=/s@.*@SystemMaxUse=10G@g;/SystemMaxFileSize=/s@.*@SystemMaxFileSize=200M@g;/MaxRetentionSec=/s@.*@MaxRetentionSec=2week@g;/ForwardToSyslog=/s@.*@ForwardToSyslog=no@g' /etc/systemd/journald.conf
         chattr +i /etc/resolv.conf;
       tags: init
 
@@ -55,50 +48,33 @@
         - kubernetes.repo
         - docker-ce.repo
         - elrepo.repo
+        - Centos7-aliyun.repo
       tags: init
 
     - name: 3. install linux base software
-      yum: name={{item}} state=latest enablerepo=elrepo-kernel
-      with_items:
-        - tree
-        - ntpdate
-        - telnet
-        - bc
-        - nc
-        - socat
-        - net-tools
-        - nfs-utils
-        - rpcbind
-        - wget
-        - lsof
-        - rsync
-        - bash-completion
-        - irqbalance
-        - iptables-services
-        - ipset
-        - ipvsadm
-        - bind-utils
-        - python-setuptools
-        - yum-utils
-        - kernel-ml
-        - docker
-      when: elrepo_result.stat.exists == False
+      shell: |
+        yum install -y --enablerepo=elrepo-kernel epel-release tree ntpdate telnet bc nc socat net-tools nfs-utils rpcbind wget lsof rsync bash-completion irqbalance iptables-services ipset ipvsadm jq bind-utils python-setuptools yum-utils kernel-ml docker systemd device-mapper-persistent-data lvm2 conntrack iptables curl sysstat libseccomp vim
       tags: init
 
+    - name: 3. install docker package
+      shell: |
+        yum install -y docker systemd device-mapper-persistent-data lvm2 conntrack libseccomp
+      tags: docker
+
     - name: 3. install etcd
-      yum: name={{item}} state=latest
+      yum: name={{item}} state=installed
       with_items:
         - etcd
       tags: etcd
 
     - name: 3. install flannel
-      yum: name={{item}} state=latest
+      yum: name={{item}} state=installed
       with_items:
         - flannel
       tags: flannel
 
     - name: 3. install etcd,flannel,kubernetes
-      yum: name={{item}} state=latest
+      yum: name={{item}} state=installed
       with_items:
         - etcd
         - flannel
@@ -106,7 +82,7 @@
       tags: k8s
 
     - name: 3. install kubeadm toolkit
-      yum: name={{item}} state=latest enablerepo=kubernetes
+      yum: name={{item}} state=installed enablerepo=kubernetes
       with_items:
         - kubelet
         - kubeadm
@@ -116,53 +92,27 @@
     - name: 3. install cni plugins latest
       shell: |
         CNI="/root/cni-plugins.tgz"
-        mkdir -p /etc/cni/net.d /opt/cni/bin /etc/kubernetes/ssl/
+        mkdir -p /etc/cni/net.d /opt/cni/bin /etc/kubernetes/ssl/ {{ Extra_dir }}/kubelet
         [ -s $CNI ] || (wget -c {{CNI_Repo}} -O $CNI;tar xvf $CNI -C /opt/cni/bin/)
       tags:
         - k8s-bin
         - kube-router
 
-    - name: 3. install coredns replace kube-dns
+    - name: 3. generate coredns config to replace kube-dns
       shell: |
         DIR="/root/coredns"
-        mkdir -p $DIR && cd $DIR
-        wget -c https://raw.githubusercontent.com/coredns/deployment/master/kubernetes/coredns.yaml.sed
-        wget -c https://raw.githubusercontent.com/coredns/deployment/master/kubernetes/deploy.sh
+        mkdir -p $DIR && cd $DIR && rm -rf $DIR/*
+        wget --no-check-certificate -c https://raw.githubusercontent.com/coredns/deployment/master/kubernetes/coredns.yaml.sed
+        wget --no-check-certificate -c https://raw.githubusercontent.com/coredns/deployment/master/kubernetes/deploy.sh
         chmod +x deploy.sh
         $DIR/deploy.sh -i {{ DNS_cluster_ip }} -d "{{ KUBE_Service_Domain }}" > $DIR/coredns.yaml
         #kubectl apply -f coredns.yml
       tags:
         - k8s-bin
         - kube-router
+      ignore_errors: yes 
       when:
         K8S == "master" or K8S == "both"
-
-    - name: 4. config kubelet setting
-      shell:
-        sed -r -i '/Environment="KUBELET_CGROUP_ARGS=/s^.*^Environment="KUBELET_CGROUP_ARGS=--cgroup-driver=systemd --runtime-cgroups=/systemd/system.slice --kubelet-cgroups=/systemd/system.slice"^g' /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
-        systemctl daemon-reload;
-        systemctl enable kubelet;
-      tags: kubeadm
-
-    - name: 4. config docker and kernel-ml setting
-      shell: |
-        cp -a /lib/systemd/system/docker.service /etc/systemd/system/docker.service
-        sed -r -i "s|ExecStart=/usr/bin/docker-current .*|ExecStart=/usr/bin/docker-current daemon --registry-mirror={{Docker_Mirror}} \\\\|g" /etc/systemd/system/docker.service
-        sed -r -i "/ExecStartPost=.*iptables -I FORWARD -s 0.0.0.0.*-j ACCEPT/d" /etc/systemd/system/docker.service
-        sed -r -i "/ExecStart=/i ExecStartPost=/usr/sbin/iptables -I FORWARD -s 0.0.0.0/0 -j ACCEPT" /etc/systemd/system/docker.service
-        sed -r -i "s/native.cgroupdriver=.*/native.cgroupdriver=systemd \\\\/g" /etc/systemd/system/docker.service
-        ln -snf /usr/libexec/docker/docker-runc-current /usr/local/bin/docker-runc
-        systemctl daemon-reload
-        systemctl enable docker
-        echo "options ip_vs conn_tab_bits=20" > /etc/modprobe.d/ipvs.conf
-        Version=`yum info kernel-ml|awk -F: '/Version/{print $2}'`
-        Menu=`sed -r -n "s/^menuentry '(.*)' --class.*/\1/p" /boot/grub2/grub.cfg|grep $Version`
-        grub2-set-default "$Menu"
-        grub2-mkconfig -o /boot/grub2/grub.cfg
-      tags:
-        - init
-        - docker
-      ignore_errors: yes 
 
     - name: 4. template docker config
       template: src=template/docker.j2 dest=/etc/sysconfig/docker
@@ -181,6 +131,27 @@
       tags:
         - k8s
         - etcd
+      ignore_errors: yes
+      when:
+        ETCD == "yes"
+
+    - name: 4. copy etcd service
+      copy: src=template/etcd.service dest=/usr/lib/systemd/system/etcd.service
+      tags:
+        - k8s
+        - etcd
+      ignore_errors: yes
+      when:
+        ETCD == "yes"
+
+    - name: 4. systemctl etcd setting
+      shell:
+        systemctl enable etcd;
+        systemctl daemon-reload;
+      tags:
+        - k8s
+        - etcd
+      ignore_errors: yes
       when:
         ETCD == "yes"
 
@@ -199,6 +170,26 @@
       when:
         K8S == "master" or K8S == "both"
 
+    - name: 4. template kube-apiserver config
+      shell: | 
+        awk '{gsub("-","");print $0",kubelet-bootstrap,10001,\"system:kubelet-bootstrap\""}' /proc/sys/kernel/random/uuid > /etc/kubernetes/token.kubeconfig
+      tags:
+        - k8s
+        - k8s-bin
+        - kube-router
+      when:
+        K8S == "master" or K8S == "both"
+
+    - name: 4. check kube-apiserver etcd config
+      shell: | 
+        sed -r -i '/KUBE_ETCD_SERVERS=/s@(.*),"@\1"@g' /etc/kubernetes/apiserver
+      tags:
+        - k8s
+        - k8s-bin
+        - kube-router
+      when:
+        K8S == "master" or K8S == "both"
+
     - name: 4. template kube-controller-manager config
       template: src=template/kube-controller-manager.j2 dest=/etc/kubernetes/controller-manager
       tags:
@@ -210,6 +201,15 @@
 
     - name: 4. template kube-scheduler config
       template: src=template/kube-scheduler.j2 dest=/etc/kubernetes/scheduler
+      tags:
+        - k8s
+        - k8s-bin
+        - kube-router
+      when:
+        K8S == "master" or K8S == "both"
+
+    - name: 4. template kube-scheduler yaml
+      template: src=template/kube-scheduler.yaml.j2 dest=/etc/kubernetes/kube-scheduler.yaml
       tags:
         - k8s
         - k8s-bin
@@ -251,47 +251,93 @@
       when:
         K8S == "slave" or K8S == "both"
 
+    - name: 4. config docker and kernel-ml setting
+      shell: |
+        cp -a /lib/systemd/system/docker.service /etc/systemd/system/docker.service
+        sed -r -i "s|ExecStart=/usr/bin/docker-current .*|ExecStart=/usr/bin/docker-current daemon --registry-mirror={{Docker_Mirror}} \\\\|g" /etc/systemd/system/docker.service
+        sed -r -i "/ExecStartPost=.*iptables -I FORWARD -s 0.0.0.0.*-j ACCEPT/d" /etc/systemd/system/docker.service
+        sed -r -i "/ExecStart=/i ExecStartPost=/usr/sbin/iptables -I FORWARD -s 0.0.0.0/0 -j ACCEPT" /etc/systemd/system/docker.service
+        sed -r -i "s/native.cgroupdriver=.*/native.cgroupdriver=systemd \\\\/g" /etc/systemd/system/docker.service
+        sed -r -i 's/biosdevname=0//g;s/net.ifnames=0//g' /etc/sysconfig/grub
+        sed -r -i 's/biosdevname=0//g;s/net.ifnames=0//g' /etc/default/grub
+        $(ip link|grep -iq "eth[0-9]\{1,3\}:.*up") && sed -r -i '/GRUB_CMDLINE_LINUX/s^(.*)="(.*)"$^\1="\2 biosdevname=0 net.ifnames=0"^g' /etc/sysconfig/grub
+        $(ip link|grep -iq "eth[0-9]\{1,3\}:.*up") && sed -r -i '/GRUB_CMDLINE_LINUX/s^(.*)="(.*)"$^\1="\2 biosdevname=0 net.ifnames=0"^g' /etc/default/grub
+        sed -r -i 's/overlay/overlay2/g' /etc/sysconfig/docker*
+        grep -iqw "overlay2" /etc/sysconfig/docker* && sed -r -i '/overlay2/d' /etc/docker/daemon.json
+        ln -snf /usr/libexec/docker/docker-runc-current /usr/local/bin/docker-runc
+        systemctl daemon-reload
+        systemctl enable docker
+        echo "options ip_vs conn_tab_bits=20" > /etc/modprobe.d/ipvs.conf
+        Version=`yum info kernel-ml|awk -F: '/Version/{print $2}'|sort -nr|head -1`
+        Menu=`sed -r -n "s/^menuentry '(.*)' --class.*/\1/p" /boot/grub2/grub.cfg|grep $Version`
+        grub2-set-default "$Menu"
+        grub2-mkconfig -o /boot/grub2/grub.cfg
+      tags:
+        - init
+        - docker
+      ignore_errors: yes 
+
     - name: 5. disable some service
       service: name={{item}} state=stopped enabled=no
       with_items:
         - firewalld
         - postfix
-      ignore_errors: yes 
       tags:
         - init
+      ignore_errors: yes 
+
+    - name: 5. copy cf-ssl pem
+      shell: K8S_SSL="/root/k8s-ssl.tgz"; [ -s $K8S_SSL ] || (wget -c {{K8S_SSL_Repo}} -O $K8S_SSL;tar xvf $K8S_SSL -C /)
+      tags:
+        - init
+        - etcd
+      ignore_errors: yes 
 
     - name: 5. enable etcd service
       service: name=etcd state=restarted enabled=yes
       tags:
         - k8s
+        - k8s-bin
+        - etcd
+      ignore_errors: yes 
+      when:
+        ETCD == "yes"
+
+    - name: 5. check etcd cluster config
+      shell: |
+        sed -r -i '/ETCD_INITIAL_CLUSTER=/s@(.*),"@\1"@g' /etc/etcd/etcd.conf
+      tags:
         - etcd
       ignore_errors: yes 
       when:
         ETCD == "yes"
 
     - name: 5. check flanneld network
-      shell: etcdctl get /upyun.com/network/config
+      shell: etcdctl --ca-file /etc/kubernetes/ssl/ca.pem --endpoints "{{TLS_ETCD}}://127.0.0.1:2379" get /upyun.com/network/config
       register: etcd_result
-      ignore_errors: yes 
       tags:
         - k8s
+        - k8s-bin
         - flannel
+      ignore_errors: yes 
       when:
-        ETCD == "yes"
+        (K8S == "master" or K8S == "both") and ETCD == "yes"
 
     - name: 5. set flanneld network
-      shell: etcdctl mk /upyun.com/network/config '{"Network":"{{Cluster_cidr}}"}'
+      shell: etcdctl --ca-file /etc/kubernetes/ssl/ca.pem --endpoints "{{TLS_ETCD}}://127.0.0.1:2379" mk /upyun.com/network/config '{"Network":"{{Cluster_cidr}}"}'
       tags:
         - k8s
+        - k8s-bin
         - flannel
       ignore_errors: yes 
       when:
-        ETCD == "yes" and etcd_result.rc != 0
+        (K8S == "master" or K8S == "both") and ETCD == "yes"
 
     - name: 5. enable service
       service: name={{item}} state=restarted enabled=yes
       tags:
         - init
+        - docker
       ignore_errors: yes 
       with_items:
         - network
@@ -332,16 +378,11 @@
       when:
         K8S == "slave" or K8S == "both"
 
-    - name: 0. copy k8s ssl pem
-      shell: K8S_SSL="/root/k8s-ssl.tgz"; [ -s $K8S_SSL ] || (wget -c {{K8S_SSL_Repo}} -O $K8S_SSL;tar xvf $K8S_SSL -C /)
-      tags:
-        - k8s-bin
-      ignore_errors: yes 
-
     - name: 1. add user kube
-      shell: groupadd kube ; useradd -g kube -n -s /sbin/nologin -M -d / -c "Kubernetes user" kube
+      shell: groupadd -f kube ; useradd -g kube -n -s /sbin/nologin -M -c "Kubernetes user" kube
       tags:
         - k8s-bin
+        - kube-router
       ignore_errors: yes 
 
     - name: 1. stop service
@@ -365,7 +406,17 @@
       ignore_errors: yes 
 
     - name: 2. sync service yaml files
-      copy: src=service dest=/root/
+      #copy: src=service dest=/root/
+      synchronize:
+        src: service
+        dest: /root/
+        checksum: yes
+        archive: no
+        links: no
+        recursive: yes
+        delete: no
+        rsync_opts:
+          - "--exclude=*.j2"
       tags:
         - k8s-bin
         - kube-router
@@ -381,7 +432,7 @@
         sed -r -i '/tls-cert-file/s@^#*@@g' $APICONF
         CONTRLCONF="/etc/kubernetes/controller-manager"
         sed -r -i '/KUBE_CONTROLLER_MANAGER_ARGS=/s@^@#@g' $CONTRLCONF
-        sed -r -i '/cluster-signing-cert-file/s@^#*@@g' $CONTRLCONF
+        sed -r -i '/service-account-private-key-file/s@^#*@@g' $CONTRLCONF
       tags:
         - k8s-bin
         - kube-router
@@ -392,8 +443,10 @@
     - name: 3. update kubelet config
       shell: |
         CONF="/etc/kubernetes/kubelet"
-        sed -r -i -e '/api-servers/s@^@#@g' -e '/master-apiconfig/s@^#*@@g' -e '/KUBELET_ARGS/s@^@#@g' $CONF
-        sed -r -i '/bootstrap-kubeconfig/s@^#*@@g' $CONF
+        sed -r -i -e '/api-servers/s@^@#@g' -e '/master-apiconfig/s@^#*@@g' -e '/KUBELET_ARGS/s@^@#@g' -e '/bootstrap-kubeconfig/s@^#*@@g' -e '/fail-swap-on/s@^#*@@g' $CONF
+        sed -r -i "/WorkingDirectory=/s^.*^WorkingDirectory={{ Extra_dir}}/kubelet^g" -e "/After=/s^.*^After={{ KUBE_CRI }}.service^g" -e "/Requires=/s^.*^Requires={{ KUBE_CRI }}.service^g" /usr/lib/systemd/system/kubelet.service
+        systemctl daemon-reload
+        systemctl enable kubelet
       tags:
         - k8s-bin
       when:
@@ -403,12 +456,24 @@
       shell: |
         CONF="/etc/kubernetes/kubelet"
         sed -r -i -e '/api-servers/s@^@#@g' -e '/master-apiconfig/s@^#*@@g' -e '/KUBELET_ARGS/s@^@#@g' $CONF
-        sed -r -i '/bootstrap-kubeconfig/s@(.*)"$@\1 --network-plugin=cni --cni-conf-dir=/etc/cni/net.d/ --cni-bin-dir=/opt/cni/bin"@g' $CONF
-        sed -r -i '/bootstrap-kubeconfig/s@^#*@@g' $CONF
+        sed -r -i '/fail-swap-on/s@(.*)"$@\1 --network-plugin=cni --cni-conf-dir=/etc/cni/net.d/ --cni-bin-dir=/opt/cni/bin"@g' $CONF
+        sed -r -i '/fail-swap-on/s@^#*@@g' $CONF
+        sed -r -i "/WorkingDirectory=/s^.*^WorkingDirectory={{ Extra_dir}}/kubelet^g" /usr/lib/systemd/system/kubelet.service
+        systemctl daemon-reload
+        systemctl enable kubelet
       tags:
         - kube-router
       when:
         K8S == "slave" or K8S == "both"
+
+    - name: 4. template kube-router config
+      template: src=service/generic-kuberouter-all-features.yaml.j2 dest=/root/service/generic-kuberouter-all-features.yaml
+      tags:
+        - k8s
+        - k8s-bin
+        - kube-router
+      when:
+        K8S == "master" or K8S == "both"
 
     - name: 5. start node service
       service: name={{item}} state=started enabled=yes
@@ -446,10 +511,24 @@
         K8S == "master" or K8S == "both"
 
     - name: 7. kubectl clusterrolebinding
-      shell: kubectl create clusterrolebinding kubelet-bootstrap --clusterrole=system:node-bootstrapper --user=kubelet-bootstrap;
+      shell: |
+        /etc/kubernetes/mkkubeconfig.sh rbac_admin
       tags:
-        - kube-router
         - k8s-bin
+        - kube-router
       ignore_errors: yes 
       when:
         K8S == "master" or K8S == "both"
+
+    - name: 8. clean kubernetes
+      shell: |
+        for i in etcd kube-apiserver kube-controller-manager kube-proxy kube-scheduler kubelet;do systemctl disable $i; systemctl stop $i;done
+        rm -rf /root/*.tgz /usr/bin/kube* /etc/kubernetes/* /opt/cni /var/run/kubernetes /etc/etcd/* /var/lib/etcd/* /var/lib/kube* /etc/cni/net.d/*
+      tags:
+        - clean
+      ignore_errors: yes
+
+    - name: 9. reboot all server
+      shell: reboot
+      tags: reboot
+      ignore_errors: yes

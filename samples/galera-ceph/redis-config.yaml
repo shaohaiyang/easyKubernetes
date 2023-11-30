@@ -11,8 +11,7 @@ data:
     CLUSTER_CONFIG="/data/nodes.conf"
     if [ -f ${CLUSTER_CONFIG} ]; then
       if [ -z "${POD_IP}" ]; then 
-        echo "Unable to determine Pod IP address!"
-        exit 1
+    	POD_IP=$(awk '{if ($0!~/^127.0.0.1/ && $0!~/^fe00/ && $0!~/^#/ && $0!~/^:/) print $1}' /etc/hosts)
       fi
       echo "Updating my IP to ${POD_IP} in ${CLUSTER_CONFIG}"
       sed -i.bak -e '/myself/ s/[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}/${POD_IP}/' ${CLUSTER_CONFIG}
@@ -26,3 +25,21 @@ data:
     cluster-migration-barrier 1
     appendonly yes
     protected-mode no
+
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+   name: ceph-redis
+provisioner: kubernetes.io/rbd
+parameters:
+  monitors: 192.168.146.11,192.168.146.12,192.168.146.13,192.168.146.14
+  adminId: admin
+  adminSecretName: ceph-secret
+  adminSecretNamespace: lnmp
+  pool: rbd
+  userId: admin
+  userSecretName: ceph-secret
+  fsType: xfs
+  imageFormat: "1"
+  imageFeatures: "layering"

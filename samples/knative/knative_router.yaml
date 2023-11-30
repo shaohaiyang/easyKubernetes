@@ -1,0 +1,9 @@
+apiVersion: serving.knative.dev/v1alpha1
+kind: Route
+metadata:
+  name: knative-helloworld
+  namespace: default
+spec:
+  traffic:
+  - configurationName: knative-helloworld
+percent: 100

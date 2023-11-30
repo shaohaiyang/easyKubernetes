@@ -1,11 +1,16 @@
 # logging to stderr means we get it in the systemd journal
-KUBE_LOGTOSTDERR="--logtostderr=true"
+KUBE_LOGTOSTDERR=
+#KUBE_LOG_ARGS="--event-ttl=1h --audit-log-maxage=30 --audit-log-maxbackup=3 --audit-log-maxsize=100"
 
 # journal message level, 0 is debug
 KUBE_LOG_LEVEL="--v=4"
 
 # Should this cluster be allowed to run privileged docker containers
-KUBE_ALLOW_PRIV="--allow-privileged=true"
+KUBE_ALLOW_PRIV=
 
 # How the controller-manager, scheduler, and proxy find the apiserver
+{% if TLS_CONTROL_SCHEDULER == "https" %}
+KUBE_MASTER="--master=https://{{Master}}:6443"
+{% else %}
 KUBE_MASTER="--master=http://{{Master}}:8080"
+{% endif %}

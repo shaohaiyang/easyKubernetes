@@ -30,7 +30,7 @@ spec:
       # 宿主机上的目录
       - name: nfs-pv
         nfs:
-          path: /mnt/nfs
+          path: /mnt/nfs/wordpress
           server: 192.168.13.142
       - name: config
         configMap:
